@@ -218,7 +218,119 @@ LiquidLine line42(0, 3, "Height: ",heigh,"cm");
 LiquidLine line43(0, 3, "Diameter: ",Diameter,"cm");
 LiquidScreen screen4(line41, line42, line43);
 
+LiquidMenu menu(lcd,welcome_screen);
 //**************************************************************
+
+//********Buttons handle**********
+void  buttonsCheck() {
+  uint8_t push_cnt=0;
+  try{
+    bouncer_Up.update();
+    if (bouncer_Up.fell())
+	   {
+		// Calls the function identified with
+		// increase or 1 for the focused line.
+      bouncer_Down.update();
+      if (bouncer_Down.read()==LOW)
+        menu.call_function(4);
+      else
+        {
+        menu.call_function(1);
+        while(bouncer_Up.read()==LOW && ++push_cnt <3) 
+        {
+        delay(1000);
+        bouncer_Up.update();
+        }
+        push_cnt=0;
+        while(bouncer_Up.read()==LOW) 
+        {
+        menu.call_function(1); 
+        delay(50);
+        bouncer_Up.update();
+        }
+        
+      //menu.next_screen();
+     }
+    menu.softUpdate();
+	}
+  bouncer_Down.update();
+  if (bouncer_Down.fell())
+  {
+    bouncer_Up.update();
+    if (bouncer_Up.read()==LOW)
+      menu.call_function(4);
+    else
+    {
+		  menu.call_function(2);
+      while(bouncer_Down.read()==LOW && ++push_cnt <3) 
+      {delay(1000);
+      bouncer_Down.update();
+      }
+      push_cnt=0;
+      while(bouncer_Down.read()==LOW) 
+      {
+      menu.call_function(2); 
+      delay(50);
+      bouncer_Down.update();
+      }
+
+    }
+    //menu.previous_screen();
+    menu.softUpdate();
+	}
+  bouncer_Enter.update();
+	if (bouncer_Enter.fell()) {
+		// Switches focus to the next line.
+    menu.switch_focus();
+    menu.softUpdate(); 
+	  }
+  }
+  catch(std::exception e) {
+  Serial.println(e.what());
+ }
+}
+
+//***************************************
+//***************************************
+void idle_function(){}
+void nextScreen()
+{
+  Serial.printf("current screen = %d \n",menu.get_currentScreen());
+  Serial.printf("focused line = %d \n",menu.get_focusedLine());
+  if((menu.get_currentScreen()==&welcome_screen)&&(menu.get_focusedLine()==4))
+  menu.change_screen(&screen2);
+  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==1))
+  menu.change_screen(&screen3);
+  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==2))
+  menu.change_screen(&screen4);
+  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==3))
+  {
+    menu.change_screen(&screen4);
+    Serial.printf("current screen = %d \n",menu.get_currentScreen());
+  }
+  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==4))
+  menu.change_screen(&screen4);
+  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==5))
+  menu.change_screen(&screen4);
+  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==6))
+  menu.change_screen(&screen4);
+  else if(menu.get_currentScreen()!=&welcome_screen) 
+  menu.change_screen(&welcome_screen);
+   
+}
+
+void nextLine()
+{
+  menu.switch_focus(true);
+}
+
+void prevLine()
+{
+  menu.switch_focus(false);
+}
+
+//************************************************************************************************
+
 
 //******Print messages to lcd**********
 void LCDwrite(String msg )
@@ -332,8 +444,58 @@ void setup(void)
   delay(200);
   lpg.draw(MAX_DISTANCE);
   delay(200);
-  bouncer_Enter.update();
-  if(bouncer_Enter.read()==LOW)set_dim();
+     welcome_line0.attach_function(1,idle_function);
+    control.attach_function(1, nextScreen);
+    control.attach_function(2, nextScreen);
+  line22.attach_function(1, nextScreen);
+  //line22.attach_function(1, nextLine);
+  line22.attach_function(2, nextScreen);
+  line23.attach_function(1, nextScreen);
+ // line23.attach_function(1, nextLine);
+  line23.attach_function(2, nextScreen);  
+  line24.attach_function(1, nextScreen);
+  //line24.attach_function(1, nextLine);
+  line24.attach_function(2, nextScreen);
+  line25.attach_function(1, nextScreen);
+  //line25.attach_function(1, nextLine);
+  line25.attach_function(2, nextScreen);
+  line26.attach_function(1, nextScreen);
+  //line26.attach_function(1, nextLine);
+  line26.attach_function(2, nextScreen);
+  line27.attach_function(1, nextScreen);
+  //line27.attach_function(1, nextLine);
+  line27.attach_function(2, nextScreen);
+  line32.attach_function(1, toggle_lights);
+  line32.attach_function(2, toggle_lights);
+  //line32.attach_function(3, nextLine);
+  line33.attach_function(1, toggle_lights);
+  line33.attach_function(2, toggle_lights);
+  //line33.attach_function(3, nextLine);
+  line34.attach_function(1, toggle_lights);
+  line34.attach_function(2, toggle_lights);
+  //line34.attach_function(3, nextLine);
+  line35.attach_function(1, toggle_lights);
+  line35.attach_function(2, toggle_lights); 
+  //line35.attach_function(3, nextLine);  
+  line36.attach_function(1, toggle_lights);
+  line36.attach_function(2, toggle_lights);
+  //line36.attach_function(3, nextLine);
+  line37.attach_function(1, toggle_lights);
+  line37.attach_function(2, toggle_lights);
+  //line37.attach_function(3, nextLine);
+  line38.attach_function(1, toggle_lights);
+  line38.attach_function(2, toggle_lights); 
+  //line38.attach_function(3, nextLine);
+  line39.attach_function(1, toggle_lights);
+  line39.attach_function(2, toggle_lights); 
+  //line39.attach_function(3, nextLine);  
+
+  line42.attach_function(1, toggle_lights_auto);
+  line42.attach_function(2, toggle_lights_auto);
+  //line42.attach_function(3, nextLine);
+  line43.attach_function(1, toggle_lights_auto);
+  line43.attach_function(2, toggle_lights_auto);
+  //line43.attach_function(3, nextLine);
 }
 
 void loop(void)
