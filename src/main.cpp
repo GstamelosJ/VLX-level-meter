@@ -82,7 +82,7 @@ int Depth=EEPROM.read(3);//in case of cartesian
 int heigh = EEPROM.read(1);	//heigh of tank 1 in cm	, from sensor to base	inside  
 int Diameter = EEPROM.read(4);
 bool alarmed; 
-const int Area=Width*Depth; //the area of the cartesian tank
+float Area; //the area of the tank
 const int MAX_DISTANCE = 200;                       //max distance to measure
 int Litres1, LiqLevel, prev=0, delta, maxlitres, menu_count, Distance1;
 long prevtime;
@@ -90,12 +90,23 @@ String message;
 Bounce bouncer_Enter = Bounce();
 Bounce bouncer_Up = Bounce();
 Bounce bouncer_Down = Bounce();
+
+#define HISTORY_SIZE 8
+int history[HISTORY_SIZE];
+byte historySpot;
+long lastReading = 0;
+long lastDistance = 0;
+float newDistance;
+int maxDistance = 0;
+#define LOOPTIME 50
+boolean readingValid = false;
+long validCount = 0;
     
 // Set password to "" for open networks.
 char ssid[] = "COSMOTE-189DDC_AC";		                                            //local wifi network SSID
 char pass[] = "UXYebdfUddddKqAq";			                                //local network password
 char auth[] = "0eGWRUn2X8QvaWEpplH9UzT3pd-qh8LO";                                     // You should get Authority Token in your email.  
-BlynkTimer timer;                                                                   //config timer
+SimpleTimer timer;                                                                   //config timer
 LiquidCrystal lcd(22,23,3,18,19,21);
 LcdProgressBar lpg(&lcd, 0, 16);
 void set_dim();
@@ -198,8 +209,8 @@ void ConnectionHandler(void) {
 LiquidLine welcome_line0(0, 0, "Liquid: ",Litres1,"ltr");
 LiquidLine welcome_line1(0, 1, "Level: ", LiqLevel,"cm");
 LiquidLine welcome_line2(0, 1, "Empty: ", Distance1,"cm");
-LiquidLine welcome_line3(0, 1, "<Set_dim>");
-LiquidScreen welcome_screen(welcome_line0,welcome_line1, welcome_line2, welcome_line3);
+LiquidLine setting(0, 1, "<Set_dim>");
+LiquidScreen welcome_screen(welcome_line0,welcome_line1, welcome_line2, setting);
 
 LiquidLine line21(0, 0, "Set_Dim");
 LiquidLine line22(0, 1, "Coord_Sys:",coordinates);
@@ -207,15 +218,15 @@ LiquidLine line23(0, 1, "<Conf>");
 LiquidScreen screen2(line21, line22, line23);
 
 
-LiquidLine line31(0, 1, "Cartessian");
-LiquidLine line32(0, 3, "Height: ",heigh,"cm");
-LiquidLine line33(0, 3, "Depth: ",Depth,"cm");
-LiquidLine line34(0, 3, "Width: ",Width,"cm");
+LiquidLine line31(0, 0, "Cartessian");
+LiquidLine line32(0, 1, "Height: ",heigh,"cm");
+LiquidLine line33(0, 1, "Depth: ",Depth,"cm");
+LiquidLine line34(0, 1, "Width: ",Width,"cm");
 LiquidScreen screen3(line31, line32, line33, line34);
 
-LiquidLine line41(0, 1, "Cylinder");
-LiquidLine line42(0, 3, "Height: ",heigh,"cm");
-LiquidLine line43(0, 3, "Diameter: ",Diameter,"cm");
+LiquidLine line41(0, 0, "Cylinder");
+LiquidLine line42(0, 1, "Height: ",heigh,"cm");
+LiquidLine line43(0, 1, "Diameter: ",Diameter,"cm");
 LiquidScreen screen4(line41, line42, line43);
 
 LiquidMenu menu(lcd,welcome_screen);
@@ -297,25 +308,15 @@ void nextScreen()
 {
   Serial.printf("current screen = %d \n",menu.get_currentScreen());
   Serial.printf("focused line = %d \n",menu.get_focusedLine());
-  if((menu.get_currentScreen()==&welcome_screen)&&(menu.get_focusedLine()==4))
+  if((menu.get_currentScreen()==&welcome_screen)&&(menu.get_focusedLine()==3))
   menu.change_screen(&screen2);
-  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==1))
-  menu.change_screen(&screen3);
-  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==2))
-  menu.change_screen(&screen4);
-  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==3))
+  if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==2))
   {
-    menu.change_screen(&screen4);
-    Serial.printf("current screen = %d \n",menu.get_currentScreen());
+    if(coordinates==CARTESSIAN)
+      menu.change_screen(&screen3);
+    else if(coordinates==CYLINDER)
+      menu.change_screen(&screen4);
   }
-  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==4))
-  menu.change_screen(&screen4);
-  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==5))
-  menu.change_screen(&screen4);
-  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==6))
-  menu.change_screen(&screen4);
-  else if(menu.get_currentScreen()!=&welcome_screen) 
-  menu.change_screen(&welcome_screen);
    
 }
 
@@ -328,6 +329,86 @@ void prevLine()
 {
   menu.switch_focus(false);
 }
+
+
+//***********************************
+void incr_dimension()
+{
+  if((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==1))
+  {
+    heigh++;
+    if(heigh==401) heigh=0;
+  }
+  if((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==2))
+  {
+    Depth++;
+    if(Depth==201) Depth=0;
+  }
+  if((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==3))
+  {
+    Width++;
+    if(Width==201) Depth=0;
+  }
+  if((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==1))
+  {
+    heigh++;
+    if(heigh==401) heigh=0;
+  }
+  if((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==2))
+  {
+    Diameter++;
+    if(Diameter==201) heigh=0;
+  }
+}
+
+void decr_dimension()
+{
+  if((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==1))
+  {
+    heigh--;
+    if(heigh==0) heigh=400;
+  }
+  if((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==2))
+  {
+    Depth--;
+    if(Depth==0) Depth=200;
+  }
+  if((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==3))
+  {
+    Width--;
+    if(Width==0) Depth=200;
+  }
+  if((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==1))
+  {
+    heigh--;
+    if(heigh==0) heigh=400;
+  }
+  if((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==2))
+  {
+    Diameter--;
+    if(Diameter==0) heigh=200;
+  }
+}
+//**********************************
+void set_coordinates()
+{
+  switch(coordinates){
+    case CARTESSIAN:
+      coordinates=CYLINDER;
+      break;
+    case CYLINDER:
+      coordinates=CARTESSIAN;
+      break;
+
+  }
+}
+//************************************
+void refresh_menu()
+{
+  menu.softUpdate();
+}
+
+//***********************************
 
 //************************************************************************************************
 
@@ -349,9 +430,9 @@ void LCDwrite(String msg )
 
 void sendSensorReadings()
 {
-	LiqLevel = heigh - Distance1;							        //calculate the depth of the water
-	Litres1 = (Area * LiqLevel) / 1000;	                         //calculate the volume of the water in litres
-  maxlitres = (Area * MAX_DISTANCE) / 1000;
+	//LiqLevel = heigh - Distance1;							        //calculate the depth of the water
+	//Litres1 = (Area * LiqLevel) / 1000;	                         //calculate the volume of the water in litres
+ // maxlitres = (Area * MAX_DISTANCE) / 1000;
   delta=prev-Litres1; 
   prev=Litres1;
 //***********SEND INFO TO BLYNK
@@ -384,17 +465,9 @@ Serial.println("Tank 1 Litres: " + String(Litres1));                //print litr
 
 }
 
+//************************
 
-#define HISTORY_SIZE 8
-int history[HISTORY_SIZE];
-byte historySpot;
-long lastReading = 0;
-long lastDistance = 0;
-float newDistance;
-int maxDistance = 0;
-#define LOOPTIME 50
-boolean readingValid = false;
-long validCount = 0;
+
 void setup(void)
 {
   Wire.begin();
@@ -428,8 +501,10 @@ void setup(void)
   pinMode(DOWN,INPUT_PULLUP);
   bouncer_Down.attach(DOWN);
   bouncer_Down.interval(5);
-	timer.setInterval(2000, sendSensorReadings);		// Setup a function to be called every n seconds
-  timer.setInterval(2000, ConnectionHandler);  // check every 2s if still connected to server (previously reconnectBlynk
+	timer.setInterval(3000, sendSensorReadings);		// Setup a function to be called every n seconds
+  timer.setInterval(10,buttonsCheck);
+  timer.setInterval(200, ConnectionHandler);
+  timer.setInterval(200,refresh_menu);
   connectionState = CONNECT_TO_WIFI;
   Blynk.begin(auth, ssid, pass);  
   lcd.begin(16, 2);
@@ -444,62 +519,41 @@ void setup(void)
   delay(200);
   lpg.draw(MAX_DISTANCE);
   delay(200);
-     welcome_line0.attach_function(1,idle_function);
-    control.attach_function(1, nextScreen);
-    control.attach_function(2, nextScreen);
-  line22.attach_function(1, nextScreen);
-  //line22.attach_function(1, nextLine);
-  line22.attach_function(2, nextScreen);
+  welcome_line0.attach_function(1,idle_function);
+  setting.attach_function(1, nextScreen);
+  setting.attach_function(2, nextScreen);
+  line22.attach_function(1, set_coordinates);
+  line22.attach_function(2, set_coordinates);
   line23.attach_function(1, nextScreen);
- // line23.attach_function(1, nextLine);
   line23.attach_function(2, nextScreen);  
-  line24.attach_function(1, nextScreen);
-  //line24.attach_function(1, nextLine);
-  line24.attach_function(2, nextScreen);
-  line25.attach_function(1, nextScreen);
-  //line25.attach_function(1, nextLine);
-  line25.attach_function(2, nextScreen);
-  line26.attach_function(1, nextScreen);
-  //line26.attach_function(1, nextLine);
-  line26.attach_function(2, nextScreen);
-  line27.attach_function(1, nextScreen);
-  //line27.attach_function(1, nextLine);
-  line27.attach_function(2, nextScreen);
-  line32.attach_function(1, toggle_lights);
-  line32.attach_function(2, toggle_lights);
-  //line32.attach_function(3, nextLine);
-  line33.attach_function(1, toggle_lights);
-  line33.attach_function(2, toggle_lights);
-  //line33.attach_function(3, nextLine);
-  line34.attach_function(1, toggle_lights);
-  line34.attach_function(2, toggle_lights);
-  //line34.attach_function(3, nextLine);
-  line35.attach_function(1, toggle_lights);
-  line35.attach_function(2, toggle_lights); 
-  //line35.attach_function(3, nextLine);  
-  line36.attach_function(1, toggle_lights);
-  line36.attach_function(2, toggle_lights);
-  //line36.attach_function(3, nextLine);
-  line37.attach_function(1, toggle_lights);
-  line37.attach_function(2, toggle_lights);
-  //line37.attach_function(3, nextLine);
-  line38.attach_function(1, toggle_lights);
-  line38.attach_function(2, toggle_lights); 
-  //line38.attach_function(3, nextLine);
-  line39.attach_function(1, toggle_lights);
-  line39.attach_function(2, toggle_lights); 
-  //line39.attach_function(3, nextLine);  
 
-  line42.attach_function(1, toggle_lights_auto);
-  line42.attach_function(2, toggle_lights_auto);
-  //line42.attach_function(3, nextLine);
-  line43.attach_function(1, toggle_lights_auto);
-  line43.attach_function(2, toggle_lights_auto);
-  //line43.attach_function(3, nextLine);
+  line32.attach_function(1, incr_dimension);
+  line32.attach_function(2, decr_dimension);
+  line33.attach_function(1, incr_dimension);
+  line33.attach_function(2, decr_dimension);
+  line34.attach_function(1, incr_dimension);
+  line34.attach_function(2, decr_dimension);  
+ 
+  line42.attach_function(1, incr_dimension);
+  line42.attach_function(2, decr_dimension);
+  line43.attach_function(1, incr_dimension);
+  line43.attach_function(2, decr_dimension);
+
+  menu.init();
+  welcome_screen.set_displayLineCount(2);
+  screen2.set_displayLineCount(2);
+  screen3.set_displayLineCount(2);
+  screen4.set_displayLineCount(2);
 }
 
 void loop(void)
 {
+  if(coordinates==CARTESSIAN)
+    Area=Width*Depth; //the area of the cartessian tank
+  else if(coordinates==CYLINDER)
+    Area=(float)3.14*pow((float)(Diameter/2),2);
+
+  timer.run();
   distanceSensor.startRanging(); //Write configuration bytes to initiate measurement
   while (!distanceSensor.checkForDataReady())
   {
@@ -545,29 +599,9 @@ long avgDistance = 0;
 
   Serial.print("\tDistance(ft): ");
   Serial.print(distanceFeet, 2);
-   bouncer_Enter.update();
-  if (bouncer_Enter.read()==LOW)
-{
-  rotate_value();
-}
-switch(menu_count)
-{
-  case 1:
-   message=String(Litres1)+"Litres";
-   break;
-  case 2:
-    message="FuelLevel:"+String(LiqLevel)+"cm";
-      break;
-  case 3:
-    message="DisFrSurf:"+String(Distance1)+"cm";
-    break;  
-}
-  if (millis()>(prevtime+15))
-  {
-    lcd.print(message);
-    prevtime= millis();
-  }
-
+  LiqLevel = heigh - Distance1;							        //calculate the depth of the water
+	Litres1 = (Area * LiqLevel) / 1000;	                         //calculate the volume of the water in litres
+  maxlitres = (Area * MAX_DISTANCE) / 1000;
 	//Blynk.run();
 	timer.run();
 }
@@ -576,82 +610,7 @@ switch(menu_count)
 ///******************************
 void set_dim()
 {
-  int state=0;
-  while(bouncer_Enter.read()==LOW)bouncer_Enter.update();
-  bouncer_Enter.update();
-  delay(10);
-  while(state<4)
-  {
-    
-   
-   lcd.blink();
-    switch (state)
-    {
-    case 0:
-      bouncer_Up.update();
-      bouncer_Down.update();
-      if(bouncer_Up.read()==LOW) heigh++;
-      else if (bouncer_Down.read()==LOW)heigh--;
-      heigh%=400;
-      message="Heigh:"+String(heigh)+"cm";
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("Up/Down -> Heigh");
-      LCDwrite(message);
-      bouncer_Enter.update();
-      if(bouncer_Enter.read()==LOW)
-      {
-        state=1;
-        delay(200);
-      }
-      break;
-     case 1:
-      bouncer_Up.update();
-      bouncer_Down.update();
-      if(bouncer_Up.read()==LOW) Width++;
-      else if (bouncer_Down.read()==LOW)Width--;
-      Width%=200;
-      message="Width:"+String(Width)+"cm";
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("Up/Down -> Width");
-      LCDwrite(message);
-      bouncer_Enter.update();
-      if(bouncer_Enter.read()==LOW)
-      {
-        state=2;
-        delay(200);
-      }
-      break;
-    case 2:
-      bouncer_Up.update();
-      bouncer_Down.update();
-      if(bouncer_Up.read()==LOW) Depth++;
-      else if (bouncer_Down.read()==LOW)Depth--;
-      Depth%=200;
-      message="Depth:"+String(Depth)+"cm";
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("Up/Down -> Depth");
-      LCDwrite(message);
-      bouncer_Enter.update();
-      if(bouncer_Enter.read()==LOW)
-      {
-        state=3;
-        delay(200);
-      }
-      break; 
-    case 3:
-      message="Pr. Enter->store";
-      delay(200);
-      bouncer_Up.update();
-      bouncer_Down.update();
-      bouncer_Enter.update();
-      if(bouncer_Enter.read()==LOW) state=4;
-      else if( bouncer_Up.read()==LOW || bouncer_Down.read()==LOW) state=0; 
-    }
-    
-  }
+  
   if(EEPROM.read(1)!=heigh) EEPROM.write(1,heigh);
   if(EEPROM.read(2)!=Width) EEPROM.write(2,Width);
   if(EEPROM.read(3)!=Depth) EEPROM.write(3,Depth);
