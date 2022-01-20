@@ -17,6 +17,7 @@ counts per second).
 #include <Bounce2.h>
 #include <EEPROM.h>
 #include <LiquidMenu.h>
+#include <Preferences.h>
 
 /*
 VL53L1X sensor;
@@ -111,6 +112,7 @@ LiquidCrystal lcd(22,23,3,18,19,21);
 LcdProgressBar lpg(&lcd, 0, 16);
 void set_dim();
 void rotate_value();
+Preferences prefs;
 
 ///*************************************************************
 typedef enum {
@@ -402,6 +404,17 @@ void set_coordinates()
 
   }
 }
+
+void save_func()
+{
+   prefs.putInt("heigh", heigh);
+   prefs.putInt("Width", Width);
+   prefs.putInt("Depth", Depth);
+   prefs.putInt("Diameter", Diameter);
+   //if(EEPROM.read(4)!=coordinates) EEPROM.write(4,coordinates);
+   prefs.putInt("Coord", (int)coordinates);
+}
+
 //************************************
 void refresh_menu()
 {
@@ -474,6 +487,13 @@ void setup(void)
   Wire.setClock(400000); // use 400 kHz I2C
   Serial.begin(115200);
   Serial.println("VL53L1X Qwiic Test");
+  prefs.begin("values",false);
+  //prefs.clear();
+  heigh=prefs.getInt("heigh",100);
+  Width=prefs.getInt("Width",100);
+  Depth=prefs.getInt("Depth",100);
+  Diameter=prefs.getInt("Diameter",100);
+  coordinates=(Coordinate_type)prefs.getInt("Diameter",CARTESSIAN);
 
   if (distanceSensor.begin() != 0) //Begin returns 0 on a good init
   {
