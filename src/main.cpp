@@ -75,9 +75,9 @@ SFEVL53L1X distanceSensor;
 //SFEVL53L1X distanceSensor(Wire, SHUTDOWN_PIN, INTERRUPT_PIN);
 
 //Store distance readings to get rolling average
-#define ENTER 9
-#define UP 10
-#define DOWN  11
+#define ENTER 27
+#define UP 12
+#define DOWN  14
 int Width=EEPROM.read(2); //in case of cartesian 
 int Depth=EEPROM.read(3);//in case of cartesian	   
 int heigh = EEPROM.read(1);	//heigh of tank 1 in cm	, from sensor to base	inside  
@@ -108,7 +108,7 @@ char ssid[] = "COSMOTE-189DDC_AC";		                                            
 char pass[] = "UXYebdfUddddKqAq";			                                //local network password
 char auth[] = "0eGWRUn2X8QvaWEpplH9UzT3pd-qh8LO";                                     // You should get Authority Token in your email.  
 SimpleTimer timer;                                                                   //config timer
-LiquidCrystal lcd(22,23,3,18,19,21);
+LiquidCrystal lcd(15,2,4,16,17,5); //LiquidCrystal(rs, enable,d0, d1, d2, d3);
 LcdProgressBar lpg(&lcd, 0, 16);
 void set_dim();
 void rotate_value();
@@ -237,17 +237,12 @@ LiquidMenu menu(lcd,welcome_screen);
 //********Buttons handle**********
 void  buttonsCheck() {
   uint8_t push_cnt=0;
+  //Serial.println("entered button check");
   try{
+    //Serial.println("entered try");
     bouncer_Up.update();
-    if (bouncer_Up.fell())
-	   {
-		// Calls the function identified with
-		// increase or 1 for the focused line.
-      bouncer_Down.update();
-      if (bouncer_Down.read()==LOW)
-        menu.call_function(4);
-      else
-        {
+   if (bouncer_Up.fell()) 
+	 {
         menu.call_function(1);
         while(bouncer_Up.read()==LOW && ++push_cnt <3) 
         {
@@ -261,19 +256,11 @@ void  buttonsCheck() {
         delay(50);
         bouncer_Up.update();
         }
-        
-      //menu.next_screen();
-     }
     menu.softUpdate();
-	}
-  bouncer_Down.update();
+	  }
+  //bouncer_Down.update();
   if (bouncer_Down.fell())
   {
-    bouncer_Up.update();
-    if (bouncer_Up.read()==LOW)
-      menu.call_function(4);
-    else
-    {
 		  menu.call_function(2);
       while(bouncer_Down.read()==LOW && ++push_cnt <3) 
       {delay(1000);
@@ -286,14 +273,15 @@ void  buttonsCheck() {
       delay(50);
       bouncer_Down.update();
       }
-
-    }
-    //menu.previous_screen();
     menu.softUpdate();
-	}
+    }
+    //menu.previous_screen();*/
+    
+	//}
   bouncer_Enter.update();
 	if (bouncer_Enter.fell()) {
 		// Switches focus to the next line.
+    Serial.println("entered ENTER check");
     menu.switch_focus();
     menu.softUpdate(); 
 	  }
@@ -305,7 +293,9 @@ void  buttonsCheck() {
 
 //***************************************
 //***************************************
-void idle_function(){}
+void idle_function(){
+;
+}
 void nextScreen()
 {
   Serial.printf("current screen = %d \n",menu.get_currentScreen());
@@ -489,9 +479,9 @@ void setup(void)
   Serial.println("VL53L1X Qwiic Test");
   prefs.begin("values",false);
   //prefs.clear();
-  heigh=prefs.getInt("heigh",100);
+  heigh=prefs.getInt("heigh",200);
   Width=prefs.getInt("Width",100);
-  Depth=prefs.getInt("Depth",100);
+  Depth=prefs.getInt("Depth",50);
   Diameter=prefs.getInt("Diameter",100);
   coordinates=(Coordinate_type)prefs.getInt("Diameter",CARTESSIAN);
 
@@ -505,12 +495,12 @@ void setup(void)
   for (int x = 0; x < HISTORY_SIZE; x++)
     history[x] = 0;
 
-   if(EEPROM.read(0)==0) 
+ /*  if(EEPROM.read(0)==0) 
     {
       set_dim(); //Dimentions initialization if this is first time
       EEPROM.write(0,1);
     }
-    
+    */
   pinMode(13, OUTPUT);                                                //LED D7
   pinMode(ENTER,INPUT_PULLUP);
   bouncer_Enter.attach(ENTER);
@@ -526,7 +516,7 @@ void setup(void)
   timer.setInterval(200, ConnectionHandler);
   timer.setInterval(200,refresh_menu);
   connectionState = CONNECT_TO_WIFI;
-  Blynk.begin(auth, ssid, pass);  
+  //Blynk.begin(auth, ssid, pass);  
   lcd.begin(16, 2);
   lcd.clear();
   lcd.print("Tank Level meter");
@@ -539,7 +529,7 @@ void setup(void)
   delay(200);
   lpg.draw(MAX_DISTANCE);
   delay(200);
-  welcome_line0.attach_function(1,idle_function);
+  //welcome_line0.attach_function(1,idle_function);
   setting.attach_function(1, nextScreen);
   setting.attach_function(2, nextScreen);
   line22.attach_function(1, set_coordinates);
@@ -568,6 +558,7 @@ void setup(void)
 
 void loop(void)
 {
+  timer.run();
   if(coordinates==CARTESSIAN)
     Area=Width*Depth; //the area of the cartessian tank
   else if(coordinates==CYLINDER)
@@ -623,7 +614,7 @@ long avgDistance = 0;
 	Litres1 = (Area * LiqLevel) / 1000;	                         //calculate the volume of the water in litres
   maxlitres = (Area * MAX_DISTANCE) / 1000;
 	//Blynk.run();
-	timer.run();
+
 }
 
 
