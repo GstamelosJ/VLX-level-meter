@@ -77,11 +77,11 @@ SFEVL53L1X distanceSensor;
 //Store distance readings to get rolling average
 #define ENTER 27
 #define UP 12
-#define DOWN  14
-int Width=EEPROM.read(2); //in case of cartesian 
-int Depth=EEPROM.read(3);//in case of cartesian	   
-int heigh = EEPROM.read(1);	//heigh of tank 1 in cm	, from sensor to base	inside  
-int Diameter = EEPROM.read(4);
+#define DOWN 14
+int Width; //in case of cartesian 
+int Depth;//in case of cartesian	   
+int heigh;	//heigh of tank 1 in cm	, from sensor to base	inside  
+int Diameter;
 bool alarmed; 
 float Area; //the area of the tank
 const int MAX_DISTANCE = 200;                       //max distance to measure
@@ -90,10 +90,10 @@ long prevtime;
 String message;
 Bounce bouncer_Enter = Bounce();
 Bounce bouncer_Up = Bounce();
-Bounce bouncer_Down = Bounce();
+Bounce bouncer_Minus = Bounce();
 
 #define HISTORY_SIZE 8
-int history[HISTORY_SIZE];
+int history[HISTORY_SIZE+1];
 byte historySpot;
 long lastReading = 0;
 long lastDistance = 0;
@@ -109,10 +109,11 @@ char pass[] = "UXYebdfUddddKqAq";			                                //local netw
 char auth[] = "0eGWRUn2X8QvaWEpplH9UzT3pd-qh8LO";                                     // You should get Authority Token in your email.  
 SimpleTimer timer;                                                                   //config timer
 LiquidCrystal lcd(15,2,4,16,17,5); //LiquidCrystal(rs, enable,d0, d1, d2, d3);
-LcdProgressBar lpg(&lcd, 0, 16);
+LcdProgressBar lpg(&lcd, 1, 16);
 void set_dim();
 void rotate_value();
 Preferences prefs;
+char* progress=(char *)malloc(17);
 
 ///*************************************************************
 typedef enum {
@@ -217,6 +218,7 @@ LiquidScreen welcome_screen(welcome_line0,welcome_line1, welcome_line2, setting)
 LiquidLine line21(0, 0, "Set_Dim");
 LiquidLine line22(0, 1, "Coord_Sys:",coordinates);
 LiquidLine line23(0, 1, "<Conf>");
+LiquidLine line24(0, 1, "<Esc>");
 LiquidScreen screen2(line21, line22, line23);
 
 
@@ -224,11 +226,15 @@ LiquidLine line31(0, 0, "Cartessian");
 LiquidLine line32(0, 1, "Height: ",heigh,"cm");
 LiquidLine line33(0, 1, "Depth: ",Depth,"cm");
 LiquidLine line34(0, 1, "Width: ",Width,"cm");
+LiquidLine line35(0, 1, "<Save>");
+LiquidLine line36(0, 1, "<Esc>");
 LiquidScreen screen3(line31, line32, line33, line34);
 
 LiquidLine line41(0, 0, "Cylinder");
 LiquidLine line42(0, 1, "Height: ",heigh,"cm");
 LiquidLine line43(0, 1, "Diameter: ",Diameter,"cm");
+LiquidLine line44(0, 1, "<Save>");
+LiquidLine line45(0, 1, "<Esc>");
 LiquidScreen screen4(line41, line42, line43);
 
 LiquidMenu menu(lcd,welcome_screen);
@@ -258,20 +264,20 @@ void  buttonsCheck() {
         }
     menu.softUpdate();
 	  }
-  //bouncer_Down.update();
-  if (bouncer_Down.fell())
+    bouncer_Minus.update();
+  if (bouncer_Minus.fell())
   {
 		  menu.call_function(2);
-      while(bouncer_Down.read()==LOW && ++push_cnt <3) 
+      while(bouncer_Minus.read()==LOW && ++push_cnt <3) 
       {delay(1000);
-      bouncer_Down.update();
+      bouncer_Minus.update();
       }
       push_cnt=0;
-      while(bouncer_Down.read()==LOW) 
+      while(bouncer_Minus.read()==LOW) 
       {
       menu.call_function(2); 
       delay(50);
-      bouncer_Down.update();
+      bouncer_Minus.update();
       }
     menu.softUpdate();
     }
@@ -281,10 +287,19 @@ void  buttonsCheck() {
   bouncer_Enter.update();
 	if (bouncer_Enter.fell()) {
 		// Switches focus to the next line.
-    Serial.println("entered ENTER check");
-    menu.switch_focus();
-    menu.softUpdate(); 
-	  }
+    if(((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==5))||((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==4)))
+    {
+      menu.call_function(1);
+      menu.change_screen(&welcome_screen);
+    }
+    else
+    {
+      //Serial.println("entered ENTER check");
+      menu.switch_focus();
+      
+    } 
+    menu.softUpdate();
+	}
   }
   catch(std::exception e) {
   Serial.println(e.what());
@@ -301,13 +316,24 @@ void nextScreen()
   Serial.printf("current screen = %d \n",menu.get_currentScreen());
   Serial.printf("focused line = %d \n",menu.get_focusedLine());
   if((menu.get_currentScreen()==&welcome_screen)&&(menu.get_focusedLine()==3))
-  menu.change_screen(&screen2);
-  if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==2))
+    { 
+      menu.change_screen(&screen2);
+      Serial.printf("current screen = %d \n",menu.get_currentScreen());
+    }
+  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==2))
   {
     if(coordinates==CARTESSIAN)
       menu.change_screen(&screen3);
     else if(coordinates==CYLINDER)
       menu.change_screen(&screen4);
+  }
+  else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==3))
+  {
+    menu.change_screen(&welcome_screen);
+  }
+  else if((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==5))
+  {
+    menu.change_screen(&welcome_screen);
   }
    
 }
@@ -409,6 +435,11 @@ void save_func()
 void refresh_menu()
 {
   menu.softUpdate();
+  /* if(menu.get_currentScreen()==&welcome_screen) 
+  {
+    //menu.set_focusPosition(Position::LEFT);
+    lpg.draw(LiqLevel);
+  }*/
 }
 
 //***********************************
@@ -509,8 +540,8 @@ void setup(void)
   bouncer_Up.attach(UP);
   bouncer_Up.interval(5);
   pinMode(DOWN,INPUT_PULLUP);
-  bouncer_Down.attach(DOWN);
-  bouncer_Down.interval(5);
+  bouncer_Minus.attach(DOWN);
+  bouncer_Minus.interval(5);
 	timer.setInterval(3000, sendSensorReadings);		// Setup a function to be called every n seconds
   timer.setInterval(10,buttonsCheck);
   timer.setInterval(200, ConnectionHandler);
@@ -519,37 +550,51 @@ void setup(void)
   //Blynk.begin(auth, ssid, pass);  
   lcd.begin(16, 2);
   lcd.clear();
-  lcd.print("Tank Level meter");
+  //lcd.print("Tank Level meter");
 
   // go to row 1 column 0, note that this is indexed at 0
-  lcd.setCursor(0,1); 
-  lcd.print ("LCD with ESP32");
+  //lcd.setCursor(0,0); 
+ // lcd.print ("LCD with ESP32");
   lpg.setMinValue(0);
   lpg.setMaxValue(MAX_DISTANCE);
   delay(200);
   lpg.draw(MAX_DISTANCE);
   delay(200);
-  //welcome_line0.attach_function(1,idle_function);
+  welcome_line0.attach_function(1,idle_function);
   setting.attach_function(1, nextScreen);
   setting.attach_function(2, nextScreen);
   line22.attach_function(1, set_coordinates);
   line22.attach_function(2, set_coordinates);
   line23.attach_function(1, nextScreen);
-  line23.attach_function(2, nextScreen);  
+  line23.attach_function(2, nextScreen); 
+  line24.attach_function(3, idle_function); 
 
   line32.attach_function(1, incr_dimension);
   line32.attach_function(2, decr_dimension);
   line33.attach_function(1, incr_dimension);
   line33.attach_function(2, decr_dimension);
   line34.attach_function(1, incr_dimension);
-  line34.attach_function(2, decr_dimension);  
+  line34.attach_function(2, decr_dimension); 
+  line35.attach_function(3, save_func);
+  line36.attach_function(3, idle_function);
  
   line42.attach_function(1, incr_dimension);
   line42.attach_function(2, decr_dimension);
   line43.attach_function(1, incr_dimension);
   line43.attach_function(2, decr_dimension);
+  line44.attach_function(3, save_func);
+  line45.attach_function(3, idle_function);
 
   menu.init();
+  menu.add_screen(screen2);
+	menu.add_screen(screen3);
+	menu.add_screen(screen4);
+  screen2.add_line(line24);
+  screen3.add_line(line35);
+  screen3.add_line(line36);
+  screen4.add_line(line44);
+  screen4.add_line(line45);
+
   welcome_screen.set_displayLineCount(2);
   screen2.set_displayLineCount(2);
   screen3.set_displayLineCount(2);
@@ -558,13 +603,11 @@ void setup(void)
 
 void loop(void)
 {
-  timer.run();
+  timer.run(); 
   if(coordinates==CARTESSIAN)
     Area=Width*Depth; //the area of the cartessian tank
   else if(coordinates==CYLINDER)
     Area=(float)3.14*pow((float)(Diameter/2),2);
-
-  timer.run();
   distanceSensor.startRanging(); //Write configuration bytes to initiate measurement
   while (!distanceSensor.checkForDataReady())
   {
