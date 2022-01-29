@@ -95,7 +95,7 @@ Bounce bouncer_Minus = Bounce();
 #define HISTORY_SIZE 8
 int history[HISTORY_SIZE+1];
 byte historySpot;
-long lastReading = 0;
+long lastReading = 0, menuTimer=0;
 long lastDistance = 0;
 float newDistance;
 int maxDistance = 0;
@@ -107,7 +107,7 @@ long validCount = 0;
 char ssid[] = "COSMOTE-189DDC_AC";		                                            //local wifi network SSID
 char pass[] = "UXYebdfUddddKqAq";			                                //local network password
 char auth[] = "0eGWRUn2X8QvaWEpplH9UzT3pd-qh8LO";                                     // You should get Authority Token in your email.  
-SimpleTimer timer;                                                                   //config timer
+SimpleTimer timer, timerMenu;                                                                   //config timer
 LiquidCrystal lcd(15,2,4,16,17,5); //LiquidCrystal(rs, enable,d0, d1, d2, d3);
 LcdProgressBar lpg(&lcd, 1, 16);
 void set_dim();
@@ -205,8 +205,11 @@ void ConnectionHandler(void) {
   }
 }
 //*******************************************************************************************
-
-
+//************Blync sync all*************
+BLYNK_CONNECTED() {
+    Blynk.syncAll();
+}
+//***************************************
 
 //****************MENU Definition******************
 LiquidLine welcome_line0(0, 0, "Liquid: ",Litres1,"ltr");
@@ -249,6 +252,7 @@ void  buttonsCheck() {
     bouncer_Up.update();
    if (bouncer_Up.fell()) 
 	 {
+     menuTimer=millis();
         menu.call_function(1);
         while(bouncer_Up.read()==LOW && ++push_cnt <3) 
         {
@@ -267,6 +271,7 @@ void  buttonsCheck() {
     bouncer_Minus.update();
   if (bouncer_Minus.fell())
   {
+    menuTimer=millis();
 		  menu.call_function(2);
       while(bouncer_Minus.read()==LOW && ++push_cnt <3) 
       {delay(1000);
@@ -287,10 +292,14 @@ void  buttonsCheck() {
   bouncer_Enter.update();
 	if (bouncer_Enter.fell()) {
 		// Switches focus to the next line.
-    if(((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==5))||((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==4)))
+    menuTimer=millis();
+    if(((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==3))||((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==5))||((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==4)))
     {
-      menu.call_function(1);
-      menu.change_screen(&welcome_screen);
+      menu.call_function(3);
+    }
+    else if(((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==4))||((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==3)))
+    {
+      menu.call_function(3);
     }
     else
     {
@@ -313,12 +322,12 @@ void idle_function(){
 }
 void nextScreen()
 {
-  Serial.printf("current screen = %d \n",menu.get_currentScreen());
-  Serial.printf("focused line = %d \n",menu.get_focusedLine());
+  //Serial.printf("current screen = %d \n",menu.get_currentScreen());
+ // Serial.printf("focused line = %d \n",menu.get_focusedLine());
   if((menu.get_currentScreen()==&welcome_screen)&&(menu.get_focusedLine()==3))
     { 
       menu.change_screen(&screen2);
-      Serial.printf("current screen = %d \n",menu.get_currentScreen());
+      //Serial.printf("current screen = %d \n",menu.get_currentScreen());
     }
   else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==2))
   {
@@ -326,13 +335,22 @@ void nextScreen()
       menu.change_screen(&screen3);
     else if(coordinates==CYLINDER)
       menu.change_screen(&screen4);
+    else
+      menu.change_screen(&screen3);
   }
   else if((menu.get_currentScreen()==&screen2)&&(menu.get_focusedLine()==3))
   {
+    menu.switch_focus();
     menu.change_screen(&welcome_screen);
   }
   else if((menu.get_currentScreen()==&screen3)&&(menu.get_focusedLine()==5))
   {
+    menu.switch_focus();
+    menu.change_screen(&welcome_screen);
+  }
+  else if((menu.get_currentScreen()==&screen4)&&(menu.get_focusedLine()==4))
+  {
+    menu.switch_focus();
     menu.change_screen(&welcome_screen);
   }
    
@@ -417,6 +435,8 @@ void set_coordinates()
     case CYLINDER:
       coordinates=CARTESSIAN;
       break;
+    default:
+      coordinates=CARTESSIAN;
 
   }
 }
@@ -429,12 +449,44 @@ void save_func()
    prefs.putInt("Diameter", Diameter);
    //if(EEPROM.read(4)!=coordinates) EEPROM.write(4,coordinates);
    prefs.putInt("Coord", (int)coordinates);
+   menu.switch_focus();
+   menu.switch_focus();
+   menu.change_screen(&welcome_screen);
 }
 
-//************************************
+//******Print messages to lcd**********
+void LCDwrite(String msg )
+{
+ LcdProgressBar lpg(&lcd, 1, 16);
+  //LCD_progress_bar (0, WaterDepth1, 0, MAX_DISTANCE);
+  lpg.setMinValue(0);
+  lpg.setMaxValue(MAX_DISTANCE);
+  delay(200);
+  lpg.draw(LiqLevel);
+  //lcd.clear();
+    // go to row 1 column 0, note that this is indexed at 0
+    //for(int i=0;i<16;i++) lcd.write(1022);
+   lcd.setCursor(0,0); 
+   lcd.print(msg);
+   //lcd.print (String(Litres1)+" Liters");
+   
+}
+
+//****************Refresh Menu******************
 void refresh_menu()
 {
-  menu.softUpdate();
+  if (millis()-menuTimer>30000)
+  {
+    if(millis()-menuTimer>30000&&millis()-menuTimer<30100)
+    lcd.clear();
+    message="FuelVol: "+String(Litres1)+"Ltr";
+    LCDwrite(message); 
+  }
+  else 
+  {
+    menu.softUpdate();
+  }
+  
   /* if(menu.get_currentScreen()==&welcome_screen) 
   {
     //menu.set_focusPosition(Position::LEFT);
@@ -447,20 +499,7 @@ void refresh_menu()
 //************************************************************************************************
 
 
-//******Print messages to lcd**********
-void LCDwrite(String msg )
-{
- 
-  //LCD_progress_bar (0, WaterDepth1, 0, MAX_DISTANCE);
-  lpg.draw(LiqLevel);
-  lcd.clear();
-    // go to row 1 column 0, note that this is indexed at 0
-    //for(int i=0;i<16;i++) lcd.write(1022);
-   lcd.setCursor(0,1); 
-   lcd.print(msg);
-   //lcd.print (String(Litres1)+" Liters");
-   
-}
+
 
 void sendSensorReadings()
 {
@@ -490,125 +529,24 @@ if (Litres1<=(maxlitres/8))
 }
 
 //************************* can be commented out, test use only
-Serial.println();
-Serial.println();
-Serial.println("Tank 1 water distance: " + String(Distance1));   //print depth
-Serial.println("Tank 1 water depth: " + String(LiqLevel));  //print depth
-Serial.println("Tank 1 Litres: " + String(Litres1));                //print litres
+//Serial.println();
+//Serial.println();
+//Serial.println("Tank 1 water distance: " + String(Distance1));   //print depth
+//Serial.println("Tank 1 water depth: " + String(LiqLevel));  //print depth
+//Serial.println("Tank 1 Litres: " + String(Litres1));                //print litres
 //***********************************************   
 
 }
 
-//************************
-
-
-void setup(void)
+//********************Take measure******************
+void take_measure()
 {
-  Wire.begin();
-  Wire.setClock(400000); // use 400 kHz I2C
-  Serial.begin(115200);
-  Serial.println("VL53L1X Qwiic Test");
-  prefs.begin("values",false);
-  //prefs.clear();
-  heigh=prefs.getInt("heigh",200);
-  Width=prefs.getInt("Width",100);
-  Depth=prefs.getInt("Depth",50);
-  Diameter=prefs.getInt("Diameter",100);
-  coordinates=(Coordinate_type)prefs.getInt("Diameter",CARTESSIAN);
-
-  if (distanceSensor.begin() != 0) //Begin returns 0 on a good init
-  {
-    Serial.println("Sensor failed to begin. Please check wiring. Freezing...");
-    while (1)
-      ;
-  }
-  Serial.println("Sensor online!");
-  for (int x = 0; x < HISTORY_SIZE; x++)
-    history[x] = 0;
-
- /*  if(EEPROM.read(0)==0) 
-    {
-      set_dim(); //Dimentions initialization if this is first time
-      EEPROM.write(0,1);
-    }
-    */
-  pinMode(13, OUTPUT);                                                //LED D7
-  pinMode(ENTER,INPUT_PULLUP);
-  bouncer_Enter.attach(ENTER);
-  bouncer_Enter.interval(5);
-  pinMode(UP,INPUT_PULLUP);
-  bouncer_Up.attach(UP);
-  bouncer_Up.interval(5);
-  pinMode(DOWN,INPUT_PULLUP);
-  bouncer_Minus.attach(DOWN);
-  bouncer_Minus.interval(5);
-	timer.setInterval(3000, sendSensorReadings);		// Setup a function to be called every n seconds
-  timer.setInterval(10,buttonsCheck);
-  timer.setInterval(200, ConnectionHandler);
-  timer.setInterval(200,refresh_menu);
-  connectionState = CONNECT_TO_WIFI;
-  //Blynk.begin(auth, ssid, pass);  
-  lcd.begin(16, 2);
-  lcd.clear();
-  //lcd.print("Tank Level meter");
-
-  // go to row 1 column 0, note that this is indexed at 0
-  //lcd.setCursor(0,0); 
- // lcd.print ("LCD with ESP32");
-  lpg.setMinValue(0);
-  lpg.setMaxValue(MAX_DISTANCE);
-  delay(200);
-  lpg.draw(MAX_DISTANCE);
-  delay(200);
-  welcome_line0.attach_function(1,idle_function);
-  setting.attach_function(1, nextScreen);
-  setting.attach_function(2, nextScreen);
-  line22.attach_function(1, set_coordinates);
-  line22.attach_function(2, set_coordinates);
-  line23.attach_function(1, nextScreen);
-  line23.attach_function(2, nextScreen); 
-  line24.attach_function(3, idle_function); 
-
-  line32.attach_function(1, incr_dimension);
-  line32.attach_function(2, decr_dimension);
-  line33.attach_function(1, incr_dimension);
-  line33.attach_function(2, decr_dimension);
-  line34.attach_function(1, incr_dimension);
-  line34.attach_function(2, decr_dimension); 
-  line35.attach_function(3, save_func);
-  line36.attach_function(3, idle_function);
- 
-  line42.attach_function(1, incr_dimension);
-  line42.attach_function(2, decr_dimension);
-  line43.attach_function(1, incr_dimension);
-  line43.attach_function(2, decr_dimension);
-  line44.attach_function(3, save_func);
-  line45.attach_function(3, idle_function);
-
-  menu.init();
-  menu.add_screen(screen2);
-	menu.add_screen(screen3);
-	menu.add_screen(screen4);
-  screen2.add_line(line24);
-  screen3.add_line(line35);
-  screen3.add_line(line36);
-  screen4.add_line(line44);
-  screen4.add_line(line45);
-
-  welcome_screen.set_displayLineCount(2);
-  screen2.set_displayLineCount(2);
-  screen3.set_displayLineCount(2);
-  screen4.set_displayLineCount(2);
-}
-
-void loop(void)
-{
-  timer.run(); 
-  if(coordinates==CARTESSIAN)
+    if(coordinates==0)
     Area=Width*Depth; //the area of the cartessian tank
-  else if(coordinates==CYLINDER)
+  else if(coordinates==1)
     Area=(float)3.14*pow((float)(Diameter/2),2);
-  distanceSensor.startRanging(); //Write configuration bytes to initiate measurement
+  //Serial.printf("Area(cm): %2f\n",Area);
+    distanceSensor.startRanging(); //Write configuration bytes to initiate measurement
   while (!distanceSensor.checkForDataReady())
   {
     delay(1);
@@ -616,7 +554,7 @@ void loop(void)
   int distance = distanceSensor.getDistance(); //Get the result of the measurement from the sensor
   distanceSensor.clearInterrupt();
   distanceSensor.stopRanging();
-  lastReading = millis();
+  //lastReading = millis();
 
   history[historySpot] = distance;
   if (historySpot++ == HISTORY_SIZE)
@@ -656,7 +594,119 @@ long avgDistance = 0;
   LiqLevel = heigh - Distance1;							        //calculate the depth of the water
 	Litres1 = (Area * LiqLevel) / 1000;	                         //calculate the volume of the water in litres
   maxlitres = (Area * MAX_DISTANCE) / 1000;
-	//Blynk.run();
+}
+
+
+
+
+//************************setup*********************
+
+
+void setup(void)
+{
+  Wire.begin();
+  Wire.setClock(400000); // use 400 kHz I2C
+  Serial.begin(115200);
+  Serial.println("VL53L1X Qwiic Test");
+  prefs.begin("values",false);
+  //prefs.clear();
+  heigh=prefs.getInt("heigh",200);
+  Width=prefs.getInt("Width",100);
+  Depth=prefs.getInt("Depth",50);
+  Diameter=prefs.getInt("Diameter",100);
+  coordinates=(Coordinate_type)prefs.getInt("Coord",CARTESSIAN);
+
+  if (distanceSensor.begin() != 0) //Begin returns 0 on a good init
+  {
+    Serial.println("Sensor failed to begin. Please check wiring. Freezing...");
+    while (1)
+      ;
+  }
+  Serial.println("Sensor online!");
+  for (int x = 0; x < HISTORY_SIZE; x++)
+    history[x] = 0;
+
+ /*  if(EEPROM.read(0)==0) 
+    {
+      set_dim(); //Dimentions initialization if this is first time
+      EEPROM.write(0,1);
+    }
+    */
+  pinMode(13, OUTPUT);                                                //LED D7
+  pinMode(ENTER,INPUT_PULLUP);
+  bouncer_Enter.attach(ENTER);
+  bouncer_Enter.interval(5);
+  pinMode(UP,INPUT_PULLUP);
+  bouncer_Up.attach(UP);
+  bouncer_Up.interval(5);
+  pinMode(DOWN,INPUT_PULLUP);
+  bouncer_Minus.attach(DOWN);
+  bouncer_Minus.interval(5);
+	timer.setInterval(3000, sendSensorReadings);		// Setup a function to be called every n seconds
+  timer.setInterval(10,buttonsCheck);
+  timer.setInterval(300, ConnectionHandler);
+  timer.setInterval(200,refresh_menu);
+  timer.setInterval(1000,take_measure);
+  menuTimer=millis();
+  connectionState = CONNECT_TO_WIFI;
+  //Blynk.begin(auth, ssid, pass);  
+  lcd.begin(16, 2);
+  lcd.clear();
+  //lcd.print("Tank Level meter");
+
+  // go to row 1 column 0, note that this is indexed at 0
+  //lcd.setCursor(0,0); 
+ // lcd.print ("LCD with ESP32");
+  lpg.setMinValue(0);
+  lcd.clear();
+  lpg.setMaxValue(MAX_DISTANCE);
+  delay(2000);
+  lpg.draw(MAX_DISTANCE);
+  delay(2000);
+  welcome_line0.attach_function(1,idle_function);
+  setting.attach_function(1, nextScreen);
+  setting.attach_function(2, nextScreen);
+  line22.attach_function(1, set_coordinates);
+  line22.attach_function(2, set_coordinates);
+  line23.attach_function(1, nextScreen);
+  line23.attach_function(2, nextScreen); 
+  line24.attach_function(3, nextScreen); 
+
+  line32.attach_function(1, incr_dimension);
+  line32.attach_function(2, decr_dimension);
+  line33.attach_function(1, incr_dimension);
+  line33.attach_function(2, decr_dimension);
+  line34.attach_function(1, incr_dimension);
+  line34.attach_function(2, decr_dimension); 
+  line35.attach_function(3, save_func);
+  line36.attach_function(3, nextScreen);
+ 
+  line42.attach_function(1, incr_dimension);
+  line42.attach_function(2, decr_dimension);
+  line43.attach_function(1, incr_dimension);
+  line43.attach_function(2, decr_dimension);
+  line44.attach_function(3, save_func);
+  line45.attach_function(3, nextScreen);
+
+  menu.init();
+  menu.add_screen(screen2);
+	menu.add_screen(screen3);
+	menu.add_screen(screen4);
+  screen2.add_line(line24);
+  screen3.add_line(line35);
+  screen3.add_line(line36);
+  screen4.add_line(line44);
+  screen4.add_line(line45);
+
+  welcome_screen.set_displayLineCount(2);
+  screen2.set_displayLineCount(2);
+  screen3.set_displayLineCount(2);
+  screen4.set_displayLineCount(2);
+}
+
+void loop(void)
+{
+  timer.run(); 
 
 }
 
