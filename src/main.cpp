@@ -108,7 +108,7 @@ char ssid[] = "COSMOTE-189DDC_AC";		                                            
 char pass[] = "UXYebdfUddddKqAq";			                                //local network password
 char auth[] = "0eGWRUn2X8QvaWEpplH9UzT3pd-qh8LO";                                     // You should get Authority Token in your email.  
 SimpleTimer timer, timerMenu;                                                                   //config timer
-LiquidCrystal lcd(15,2,4,16,17,5); //LiquidCrystal(rs, enable,d0, d1, d2, d3);
+LiquidCrystal lcd(2,4,16,17,5,18); //LiquidCrystal(rs, enable,d0, d1, d2, d3);
 LcdProgressBar lpg(&lcd, 1, 16);
 void set_dim();
 void rotate_value();
@@ -632,6 +632,8 @@ void setup(void)
       EEPROM.write(0,1);
     }
     */
+  pinMode(15,OUTPUT);
+  digitalWrite(15,LOW);
   pinMode(13, OUTPUT);                                                //LED D7
   pinMode(ENTER,INPUT_PULLUP);
   bouncer_Enter.attach(ENTER);
